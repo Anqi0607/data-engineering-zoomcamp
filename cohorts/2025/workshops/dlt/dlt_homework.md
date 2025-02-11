@@ -39,8 +39,7 @@ import dlt
 print("dlt version:", dlt.__version__)
 ```
 
-**Answer**:  
-- Provide the **version** you see in the output.
+Provide the **version** you see in the output.
 
 ## **Question 2: Define & Run the Pipeline (NYC Taxi API)**
 
@@ -95,8 +94,12 @@ conn.sql("DESCRIBE").df()
 
 ```
 
-**Answer:**
-* How many tables were created?
+How many tables were created?
+
+* 2
+* 4
+* 6
+* 8
 
 ## **Question 3: Explore the loaded data**
 
@@ -107,8 +110,12 @@ df = pipeline.dataset(dataset_type="default").rides.df()
 df
 ```
 
-**Answer:**
-* What is the total number of records extracted?
+What is the total number of records extracted?
+
+* 2500
+* 5000
+* 7500
+* 10000
 
 ## **Question 4: Trip Duration Analysis**
 
@@ -129,12 +136,16 @@ with pipeline.sql_client() as client:
     print(res)
 ```
 
-**Answer:**
-* What is the average trip duration?
+What is the average trip duration?
+
+* 12.3049
+* 22.3049
+* 32.3049
+* 42.3049
 
 ## **Submitting the solutions**
 
-* Form for submitting: TBA
+* Form for submitting: https://courses.datatalks.club/de-zoomcamp-2025/homework/workshop1
 
 ## **Solution**
 
