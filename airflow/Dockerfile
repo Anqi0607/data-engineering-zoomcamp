@@ -13,6 +13,7 @@ COPY requirements.txt .
 USER airflow
 RUN pip install --no-cache-dir -r requirements.txt
 
+
 # Ref: https://airflow.apache.org/docs/docker-stack/recipes.html
 USER root
 SHELL ["/bin/bash", "-o", "pipefail", "-e", "-u", "-x", "-c"]
