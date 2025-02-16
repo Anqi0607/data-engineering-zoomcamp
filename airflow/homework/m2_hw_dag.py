@@ -105,7 +105,7 @@ def download_parquetize_load_gcs(
         # Task 5: Remove temp files from docker
         rm_temp_files_from_Docker_task = BashOperator(
             task_id="rm_temp_files_from_Docker_task",
-            bash_command=f"rm {output_gz_template} {output_csv_template} {output_parquet_template}"
+            bash_command=f"rm {output_csv_template} {output_parquet_template}" # .gz file no longer exists after decompression
         )
 
         # Set the task dependencies:
