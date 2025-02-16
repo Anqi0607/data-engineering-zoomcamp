@@ -1,0 +1,148 @@
+import os
+import logging
+
+from datetime import datetime
+
+from airflow import DAG
+from airflow.utils.dates import days_ago
+from airflow.operators.bash import BashOperator
+from airflow.operators.python import PythonOperator
+
+from google.cloud import storage
+from airflow.providers.google.cloud.operators.bigquery import BigQueryCreateExternalTableOperator
+import pyarrow.csv as pv
+import pyarrow.parquet as pq
+
+# Get configuration from environment variables.
+PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
+BUCKET = os.environ.get("GCP_GCS_BUCKET")
+
+AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
+
+# Define dataset file names and the URL to download.
+# NOTE: The file is in .gz format.
+URL_PREFIX = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow'
+URL_TEMPLATE = URL_PREFIX + '/yellow_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+OUTPUT_FILE_TEMPLATE = AIRFLOW_HOME + '/output_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+OUTPUT_FILE_CSV_TEMPLATE = OUTPUT_FILE_TEMPLATE.replace('.csv.gz', '.csv')
+OUTPUT_FILE_PARQUET_TEMPLATE = OUTPUT_FILE_CSV_TEMPLATE.replace('.csv', '.parquet')
+TABLE_NAME_TEMPLATE = 'yellow_taxi_{{ execution_date.strftime(\'%Y_%m\') }}'
+
+#BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", 'trips_data_all')
+
+
+def format_to_parquet(src_file):
+    """
+    Reads a CSV file and converts it to Parquet format.
+    """
+    if not src_file.endswith('.csv'):
+        logging.error("Can only accept source files in CSV format, for the moment")
+        return
+    table = pv.read_csv(src_file)
+    pq.write_table(table, src_file.replace('.csv', '.parquet'))
+
+
+# NOTE: This task takes around 20 minutes at an upload speed of 800kbps. 
+# It will be faster if your internet connection is faster.
+def upload_to_gcs(bucket, object_name, local_file):
+    """
+    Ref: https://cloud.google.com/storage/docs/uploading-objects#storage-upload-object-python
+    
+    :param bucket: GCS bucket name
+    :param object_name: target path & file name in the bucket
+    :param local_file: local file path & file name to upload
+    :return: None
+    """
+    # WORKAROUND to prevent timeout for files > 6 MB on 800 kbps upload speed.
+    # (Ref: https://github.com/googleapis/python-storage/issues/74)
+    storage.blob._MAX_MULTIPART_SIZE = 5 * 1024 * 1024  # 5 MB
+    storage.blob._DEFAULT_CHUNKSIZE = 5 * 1024 * 1024  # 5 MB
+    # End of Workaround
+
+    client = storage.Client()
+    bucket = client.bucket(bucket)
+    blob = bucket.blob(object_name)
+    blob.upload_from_filename(local_file)
+
+
+default_args = {
+    "owner": "airflow",
+    "start_date": datetime(2019, 1, 1),
+    "depends_on_past": False,
+    "retries": 1,
+}
+
+# NOTE: DAG declaration - using a Context Manager (an implicit way).
+with DAG(
+    dag_id="yellow_taxi_data_ingestion_gcs_dag",
+    end_date=datetime(2021,1,1),
+    schedule_interval="0 6 2 * *",
+    default_args=default_args,
+    catchup=True,
+    max_active_runs=3,
+    tags=['dtc-de'],
+) as dag:
+
+    # Task 1: Download the compressed dataset file.
+    download_dataset_task = BashOperator(
+        task_id="download_dataset_task",
+        bash_command=f"curl -sSLf {URL_TEMPLATE} > {OUTPUT_FILE_TEMPLATE}"
+    )
+
+    # Task 2: Decompress the downloaded file.
+    decompress_task = BashOperator(
+        task_id="decompress_csv_task",
+        bash_command="gunzip -f '{{ params.path }}/output_{{ ds[:7] }}.csv.gz'",
+        params={
+            "path": AIRFLOW_HOME,
+        },
+    )
+
+    # Task 3: Convert the decompressed CSV file to Parquet format.
+    format_to_parquet_task = PythonOperator(
+        task_id="format_to_parquet_task",
+        python_callable=format_to_parquet,
+        op_kwargs={
+            "src_file": f"{OUTPUT_FILE_CSV_TEMPLATE}",
+        },
+    )
+
+    # TODO: Homework - research and try XCOM to communicate output values between two tasks/operators.
+    # Task 4: Upload the Parquet file to Google Cloud Storage.
+    local_to_gcs_task = PythonOperator(
+        task_id="local_to_gcs_task",
+        python_callable=upload_to_gcs,
+        op_kwargs={
+            "bucket": BUCKET,
+            "object_name": f"raw/{OUTPUT_FILE_PARQUET_TEMPLATE}",
+            "local_file": f"{OUTPUT_FILE_PARQUET_TEMPLATE}",
+        },
+    )
+
+    rm_temp_files_from_Docker_task = BashOperator(
+        task_id="rm_temp_files_from_Docker_task",
+        bash_command=f"rm {OUTPUT_FILE_TEMPLATE} {OUTPUT_FILE_CSV_TEMPLATE} {OUTPUT_FILE_PARQUET_TEMPLATE}"
+    )
+    
+
+    # Will do this part in week 3
+    # Task 5: Create an external table in BigQuery that references the Parquet file in GCS.
+    # bigquery_external_table_task = BigQueryCreateExternalTableOperator(
+    #     task_id="bigquery_external_table_task",
+    #     table_resource={
+    #         "tableReference": {
+    #             "projectId": PROJECT_ID,
+    #             "datasetId": BIGQUERY_DATASET,
+    #             "tableId": "external_table",
+    #         },
+    #         "externalDataConfiguration": {
+    #             "sourceFormat": "PARQUET",
+    #             "sourceUris": [f"gs://{BUCKET}/raw/{parquet_file}"],
+    #         },
+    #     },
+    # )
+
+    # Set the task dependencies:
+    # 1. Download dataset -> 2. Decompress file -> 3. Convert to Parquet ->
+    # 4. Upload Parquet file to GCS
+    download_dataset_task >> decompress_task >> format_to_parquet_task >> local_to_gcs_task >> rm_temp_files_from_Docker_task
