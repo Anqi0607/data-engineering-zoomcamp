@@ -88,6 +88,7 @@ If you don't have a GCP account, for local ingestion you'll need two steps:
 Use the same frequency and the start date as for the yellow taxi dataset
 
 Question: how many DAG runs are green for data in 2019 after finishing everything? 
+
 `12 runs, since there is 12 monthly data for 2019`
 
 Note: when processing the data for 2020-01 you probably will get an error. It's up 
@@ -109,7 +110,7 @@ How often does it need to run?
 
 * Once
 
-(there is only one file)
+`There is only one file`
 
 
 ## Submitting the solutions
