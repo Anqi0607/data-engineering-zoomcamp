@@ -88,6 +88,7 @@ If you don't have a GCP account, for local ingestion you'll need two steps:
 Use the same frequency and the start date as for the yellow taxi dataset
 
 Question: how many DAG runs are green for data in 2019 after finishing everything? 
+`12 runs, since there is 12 monthly data for 2019`
 
 Note: when processing the data for 2020-01 you probably will get an error. It's up 
 to you to decide what to do with it - for Week 3 homework we won't need 2020 data.
@@ -106,10 +107,9 @@ Create the final DAG - for Zones:
 
 How often does it need to run?
 
-* Daily
-* Monthly
-* Yearly
 * Once
+
+(there is only one file)
 
 
 ## Submitting the solutions
