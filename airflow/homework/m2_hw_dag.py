@@ -9,7 +9,7 @@ from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 from google.cloud import storage
-from airflow.providers.google.cloud.operators.bigquery import BigQueryCreateExternalTableOperator
+#from airflow.providers.google.cloud.operators.bigquery import BigQueryCreateExternalTableOperator
 import pyarrow.csv as pv
 import pyarrow.parquet as pq
 
@@ -18,18 +18,6 @@ PROJECT_ID = os.environ.get("GCP_PROJECT_ID")
 BUCKET = os.environ.get("GCP_GCS_BUCKET")
 
 AIRFLOW_HOME = os.environ.get("AIRFLOW_HOME", "/opt/airflow/")
-
-# Define dataset file names and the URL to download.
-# NOTE: The file is in .gz format.
-URL_PREFIX = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download/yellow'
-URL_TEMPLATE = URL_PREFIX + '/yellow_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
-OUTPUT_FILE_TEMPLATE = AIRFLOW_HOME + '/output_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
-OUTPUT_FILE_CSV_TEMPLATE = OUTPUT_FILE_TEMPLATE.replace('.csv.gz', '.csv')
-OUTPUT_FILE_PARQUET_TEMPLATE = OUTPUT_FILE_CSV_TEMPLATE.replace('.csv', '.parquet')
-TABLE_NAME_TEMPLATE = 'yellow_taxi_{{ execution_date.strftime(\'%Y_%m\') }}'
-
-#BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", 'trips_data_all')
-
 
 def format_to_parquet(src_file):
     """
@@ -72,77 +60,145 @@ default_args = {
     "retries": 1,
 }
 
-# NOTE: DAG declaration - using a Context Manager (an implicit way).
-with DAG(
-    dag_id="yellow_taxi_data_ingestion_gcs_dag",
-    end_date=datetime(2021,1,1),
+def download_parquetize_load_gcs(
+        dag,
+        url_template,
+        output_gz_template,
+        output_csv_template,
+        output_parquet_template,
+        output_gcs_template
+    ):
+    with dag:
+
+        # Task 1: Download the compressed dataset file.
+        download_dataset_task = BashOperator(
+            task_id="download_dataset_task",
+            bash_command=f"curl -sSLf {url_template} > {output_gz_template}"
+        )
+
+        # Task 2: Decompress the downloaded file.
+        decompress_task = BashOperator(
+            task_id="decompress_csv_task",
+            bash_command = f"gunzip -f {output_gz_template}"
+        )
+
+        # Task 3: Convert the decompressed CSV file to Parquet format.
+        format_to_parquet_task = PythonOperator(
+            task_id="format_to_parquet_task",
+            python_callable=format_to_parquet,
+            op_kwargs={
+                "src_file": f"{output_csv_template}",
+            },
+        )
+
+        # Task 4: Upload the Parquet file to Google Cloud Storage.
+        local_to_gcs_task = PythonOperator(
+            task_id="local_to_gcs_task",
+            python_callable=upload_to_gcs,
+            op_kwargs={
+                "bucket": BUCKET,
+                "object_name": f"raw/{output_gcs_template}",
+                "local_file": f"{output_parquet_template}",
+            },
+        )
+
+        # Task 5: Remove temp files from docker
+        rm_temp_files_from_Docker_task = BashOperator(
+            task_id="rm_temp_files_from_Docker_task",
+            bash_command=f"rm {output_gz_template} {output_csv_template} {output_parquet_template}"
+        )
+
+        # Set the task dependencies:
+        download_dataset_task >> decompress_task >> format_to_parquet_task >> local_to_gcs_task >> rm_temp_files_from_Docker_task
+
+
+# Create dags for:
+# 1) Yellow and green taxi data: Jan 2019 - July 2021
+# 2) FHV Data: 2019
+# 3) Zone Data: only one file
+
+# Define dataset file names and the URL to download.
+# Note: The file is in .gz format.
+URL_PREFIX = 'https://github.com/DataTalksClub/nyc-tlc-data/releases/download'
+
+# yellow taxi trip data
+YELLOW_URL_TEMPLATE = URL_PREFIX + '/yellow/yellow_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+YELLOW_OUTPUT_GZ_TEMPLATE = AIRFLOW_HOME + '/yellow_trip_data_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+YELLOW_OUTPUT_CSV_TEMPLATE = YELLOW_OUTPUT_GZ_TEMPLATE.replace('.csv.gz', '.csv')
+YELLOW_OUTPUT_PARQUET_TEMPLATE = YELLOW_OUTPUT_CSV_TEMPLATE.replace('.csv', '.parquet')
+YELLOW_OUTPUT_GCS_TEMPLATE = 'yellow_trip_data/{{ execution_date.strftime(\'%Y-%m\') }}.parquet'
+
+
+yellow_taxi_data_dag = DAG(
+    dag_id="yellow_taxi_data_dag",
     schedule_interval="0 6 2 * *",
+    end_date=datetime(2021, 8, 1),
     default_args=default_args,
     catchup=True,
     max_active_runs=3,
     tags=['dtc-de'],
-) as dag:
+)
 
-    # Task 1: Download the compressed dataset file.
-    download_dataset_task = BashOperator(
-        task_id="download_dataset_task",
-        bash_command=f"curl -sSLf {URL_TEMPLATE} > {OUTPUT_FILE_TEMPLATE}"
-    )
+download_parquetize_load_gcs(
+    dag=yellow_taxi_data_dag,
+    url_template=YELLOW_URL_TEMPLATE,
+    output_gz_template=YELLOW_OUTPUT_GZ_TEMPLATE,
+    output_csv_template=YELLOW_OUTPUT_CSV_TEMPLATE,
+    output_parquet_template=YELLOW_OUTPUT_PARQUET_TEMPLATE,
+    output_gcs_template=YELLOW_OUTPUT_GCS_TEMPLATE
+)
 
-    # Task 2: Decompress the downloaded file.
-    decompress_task = BashOperator(
-        task_id="decompress_csv_task",
-        bash_command="gunzip -f '{{ params.path }}/output_{{ ds[:7] }}.csv.gz'",
-        params={
-            "path": AIRFLOW_HOME,
-        },
-    )
+# green taxi trip data
+GREEN_URL_TEMPLATE = URL_PREFIX + '/green/green_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+GREEN_OUTPUT_GZ_TEMPLATE = AIRFLOW_HOME + '/green_trip_data_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+GREEN_OUTPUT_CSV_TEMPLATE = GREEN_OUTPUT_GZ_TEMPLATE.replace('.csv.gz', '.csv')
+GREEN_OUTPUT_PARQUET_TEMPLATE = GREEN_OUTPUT_CSV_TEMPLATE.replace('.csv', '.parquet')
+GREEN_OUTPUT_GCS_TEMPLATE = 'green_trip_data/{{ execution_date.strftime(\'%Y-%m\') }}.parquet'
 
-    # Task 3: Convert the decompressed CSV file to Parquet format.
-    format_to_parquet_task = PythonOperator(
-        task_id="format_to_parquet_task",
-        python_callable=format_to_parquet,
-        op_kwargs={
-            "src_file": f"{OUTPUT_FILE_CSV_TEMPLATE}",
-        },
-    )
 
-    # TODO: Homework - research and try XCOM to communicate output values between two tasks/operators.
-    # Task 4: Upload the Parquet file to Google Cloud Storage.
-    local_to_gcs_task = PythonOperator(
-        task_id="local_to_gcs_task",
-        python_callable=upload_to_gcs,
-        op_kwargs={
-            "bucket": BUCKET,
-            "object_name": f"raw/{OUTPUT_FILE_PARQUET_TEMPLATE}",
-            "local_file": f"{OUTPUT_FILE_PARQUET_TEMPLATE}",
-        },
-    )
+green_taxi_data_dag = DAG(
+    dag_id="green_taxi_data_dag",
+    schedule_interval="0 6 2 * *",
+    end_date=datetime(2021, 8, 1),
+    default_args=default_args,
+    catchup=True,
+    max_active_runs=3,
+    tags=['dtc-de'],
+)
 
-    rm_temp_files_from_Docker_task = BashOperator(
-        task_id="rm_temp_files_from_Docker_task",
-        bash_command=f"rm {OUTPUT_FILE_TEMPLATE} {OUTPUT_FILE_CSV_TEMPLATE} {OUTPUT_FILE_PARQUET_TEMPLATE}"
-    )
-    
+download_parquetize_load_gcs(
+    dag=green_taxi_data_dag,
+    url_template=GREEN_URL_TEMPLATE,
+    output_gz_template=GREEN_OUTPUT_GZ_TEMPLATE,
+    output_csv_template=GREEN_OUTPUT_CSV_TEMPLATE,
+    output_parquet_template=GREEN_OUTPUT_PARQUET_TEMPLATE,
+    output_gcs_template=GREEN_OUTPUT_GCS_TEMPLATE
+)
 
-    # Will do this part in week 3
-    # Task 5: Create an external table in BigQuery that references the Parquet file in GCS.
-    # bigquery_external_table_task = BigQueryCreateExternalTableOperator(
-    #     task_id="bigquery_external_table_task",
-    #     table_resource={
-    #         "tableReference": {
-    #             "projectId": PROJECT_ID,
-    #             "datasetId": BIGQUERY_DATASET,
-    #             "tableId": "external_table",
-    #         },
-    #         "externalDataConfiguration": {
-    #             "sourceFormat": "PARQUET",
-    #             "sourceUris": [f"gs://{BUCKET}/raw/{parquet_file}"],
-    #         },
-    #     },
-    # )
+# FHV data
+FHV_URL_TEMPLATE = URL_PREFIX + '/fhv/fhv_tripdata_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+FHV_OUTPUT_GZ_TEMPLATE = AIRFLOW_HOME + '/fhv_trip_data_{{ execution_date.strftime(\'%Y-%m\') }}.csv.gz'
+FHV_OUTPUT_CSV_TEMPLATE = FHV_OUTPUT_GZ_TEMPLATE.replace('.csv.gz', '.csv')
+FHV_OUTPUT_PARQUET_TEMPLATE = FHV_OUTPUT_CSV_TEMPLATE.replace('.csv', '.parquet')
+FHV_OUTPUT_GCS_TEMPLATE = 'fhv_trip_data/{{ execution_date.strftime(\'%Y-%m\') }}.parquet'
 
-    # Set the task dependencies:
-    # 1. Download dataset -> 2. Decompress file -> 3. Convert to Parquet ->
-    # 4. Upload Parquet file to GCS
-    download_dataset_task >> decompress_task >> format_to_parquet_task >> local_to_gcs_task >> rm_temp_files_from_Docker_task
+
+fhv_taxi_data_dag = DAG(
+    dag_id="fhv_taxi_data_dag",
+    schedule_interval="0 6 2 * *",
+    end_date=datetime(2020, 1, 1),
+    default_args=default_args,
+    catchup=True,
+    max_active_runs=3,
+    tags=['dtc-de'],
+)
+
+download_parquetize_load_gcs(
+    dag=fhv_taxi_data_dag,
+    url_template=FHV_URL_TEMPLATE,
+    output_gz_template=FHV_OUTPUT_GZ_TEMPLATE,
+    output_csv_template=FHV_OUTPUT_CSV_TEMPLATE,
+    output_parquet_template=FHV_OUTPUT_PARQUET_TEMPLATE,
+    output_gcs_template=FHV_OUTPUT_GCS_TEMPLATE
+)
+
