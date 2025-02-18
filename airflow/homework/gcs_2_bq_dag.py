@@ -41,7 +41,7 @@ with DAG(
             task_id=f'move_{taxi_type}_{DATASET}_files_task',
             source_bucket=BUCKET,
             #source_object=f'{INPUT_PART}/{taxi_type}_*.{INPUT_FILETYPE}',
-            source_object=f'{INPUT_PART}/{taxi_type}_*',
+            source_object=f'{INPUT_PART}/{taxi_type}_trip_data/*',
             destination_bucket=BUCKET,
             #destination_object=f'{taxi_type}/{taxi_type}_{DATASET}*.{INPUT_FILETYPE}',
             destination_object=f'{taxi_type}/{taxi_type}_',
