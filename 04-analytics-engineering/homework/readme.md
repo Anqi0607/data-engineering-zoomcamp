@@ -106,7 +106,7 @@ You decide to make a macro to wrap a logic around it:
 
     {# This means: if stging_env_var is not defined, use target_env_var as default #}
     {%- else -%}                    {{- env_var(stging_env_var, env_var(target_env_var)) -}}
-    
+
     {%- endif -%}
 
 {%- endmacro %}
@@ -125,3 +125,20 @@ That all being said, regarding macro above, **select all statements that are tru
 - When using `core`, it materializes in the dataset defined in `DBT_BIGQUERY_TARGET_DATASET` **True**
 - When using `stg`, it materializes in the dataset defined in `DBT_BIGQUERY_STAGING_DATASET`, or defaults to `DBT_BIGQUERY_TARGET_DATASET` **True**
 - When using `staging`, it materializes in the dataset defined in `DBT_BIGQUERY_STAGING_DATASET`, or defaults to `DBT_BIGQUERY_TARGET_DATASET`**True**
+
+
+### Question 5: Taxi Quarterly Revenue Growth
+
+1. Create a new model `fct_taxi_trips_quarterly_revenue.sql`
+2. Compute the Quarterly Revenues for each year for based on `total_amount`
+3. Compute the Quarterly YoY (Year-over-Year) revenue growth 
+  * e.g.: In 2020/Q1, Green Taxi had -12.34% revenue growth compared to 2019/Q1
+  * e.g.: In 2020/Q4, Yellow Taxi had +34.56% revenue growth compared to 2019/Q4
+
+Considering the YoY Growth in 2020, which were the yearly quarters with the best (or less worse) and worst results for green, and yellow
+
+Answer:
+
+for sql script, see `fct_taxi_trips_quarterly_revenue.sql` file
+
+- `green: {best: 2020/Q1, worst: 2020/Q2}, yellow: {best: 2020/Q1, worst: 2020/Q2}`
