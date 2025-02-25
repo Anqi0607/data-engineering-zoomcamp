@@ -32,7 +32,7 @@ select *
 from {{ source('raw_nyc_tripdata', 'ext_green_taxi' ) }}
 ```
 
-Answer: 
+**Answer:** 
 - `select * from myproject.raw_nyc_tripdata.ext_green_taxi`
 
 `export DBT_BIGQUERY_PROJECT=myproject` specified the value of database name to be `myproject`, instead of the default value of `dtc_zoomcamp_2025`.
@@ -56,7 +56,7 @@ where pickup_datetime >= CURRENT_DATE - INTERVAL '30' DAY
 
 What would you change to accomplish that in a such way that command line arguments takes precedence over ENV_VARs, which takes precedence over DEFAULT value?
 
-Answer:
+**Answer:**
 - Update the WHERE clause to `pickup_datetime >= CURRENT_DATE - INTERVAL '{{ var("days_back", env_var("DAYS_BACK", "30")) }}' DAY`
 
 var() refers to the command line arguments, e.g. `dbt run --vars '{"days_back": 7}'`
@@ -64,3 +64,23 @@ var() refers to the command line arguments, e.g. `dbt run --vars '{"days_back": 
 env_var() refers to the environment variable, e.g. `export DAYS_BACK=7`
 
 `30` is the default value if neither of the above two variables are provided.
+
+
+### Question 3: dbt Data Lineage and Execution
+
+Considering the data lineage below **and** that taxi_zone_lookup is the **only** materialization build (from a .csv seed file):
+
+![image](./homework_q2.png)
+
+Select the option that does **NOT** apply for materializing `fct_taxi_monthly_zone_revenue`:
+
+- `dbt run`
+- `dbt run --select +models/core/dim_taxi_trips.sql+ --target prod`
+- `dbt run --select +models/core/fct_taxi_monthly_zone_revenue.sql`
+- `dbt run --select +models/core/`
+- `dbt run --select models/staging/+`
+
+Answer:
+
+Looks like every option will materialize fct_taxi_monthly_zone_revenue? Need to check the official solution once provided.
+
