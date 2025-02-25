@@ -6,7 +6,7 @@ models:
       List of unique zones idefied by locationid. 
       Includes the service zone they correspond to (Green or yellow).
 
-  - name: dm_monthly_zone_revenue
+  - name: dim_monthly_zone_revenue
     description: >
       Aggregated table of all taxi trips corresponding to both service zones (Green and yellow) per pickup zone, month and service.
       The table contains monthly sums of the fare elements used to calculate the monthly revenue. 
