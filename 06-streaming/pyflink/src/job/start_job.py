@@ -5,7 +5,7 @@ from pyflink.table import EnvironmentSettings, DataTypes, TableEnvironment, Stre
 def create_processed_events_sink_postgres(t_env):
     table_name = 'processed_events'
     sink_ddl = f"""
-        CREATE TABLE {table_name} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             test_data INTEGER,
             event_timestamp TIMESTAMP
         ) WITH (
@@ -21,6 +21,7 @@ def create_processed_events_sink_postgres(t_env):
     return table_name
 
 
+
 def create_events_source_kafka(t_env):
     table_name = "events"
     pattern = "yyyy-MM-dd HH:mm:ss.SSS"
@@ -34,36 +35,38 @@ def create_events_source_kafka(t_env):
             'connector' = 'kafka',
             'properties.bootstrap.servers' = 'redpanda-1:29092',
             'topic' = 'test-topic',
-            'scan.startup.mode' = 'latest-offset',
-            'properties.auto.offset.reset' = 'latest',
+            'scan.startup.mode' = 'earliest-offset',
+            'properties.auto.offset.reset' = 'earliest',
             'format' = 'json'
         );
         """
     t_env.execute_sql(source_ddl)
     return table_name
 
+
 def log_processing():
-    # Set up the execution environment
+    # 设置执行环境
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(10 * 1000)
     # env.set_parallelism(1)
 
-    # Set up the table environment
+    # 设置 Table 环境
     settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
     t_env = StreamTableEnvironment.create(env, environment_settings=settings)
     try:
-        # Create Kafka table
+        # 创建 Kafka source 表
         source_table = create_events_source_kafka(t_env)
+        # 使用已存在的 processed_events 表
         postgres_sink = create_processed_events_sink_postgres(t_env)
-        # write records to postgres too!
+        # 将 Kafka 中的记录写入 Postgres
         t_env.execute_sql(
             f"""
-                    INSERT INTO {postgres_sink}
-                    SELECT
-                        test_data,
-                        TO_TIMESTAMP_LTZ(event_timestamp, 3) as event_timestamp
-                    FROM {source_table}
-                    """
+            INSERT INTO {postgres_sink}
+            SELECT
+                test_data,
+                TO_TIMESTAMP_LTZ(event_timestamp, 3) as event_timestamp
+            FROM {source_table}
+            """
         ).wait()
 
     except Exception as e:

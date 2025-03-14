@@ -4,6 +4,8 @@ from datetime import datetime
 
 
 class Ride:
+
+    # pass进一个list（即从csv读到的一个row），用list中每个元素的值作为Ride class object的attribute的值
     def __init__(self, arr: List[str]):
         self.vendor_id = arr[0]
         self.tpep_pickup_datetime = datetime.strptime(arr[1], "%Y-%m-%d %H:%M:%S"),
@@ -25,6 +27,8 @@ class Ride:
         self.congestion_surcharge = Decimal(arr[17])
 
     @classmethod
+    #用于consume message的时候，把json转换回Ride class instances
+    #因为message在发给Kafka时变成了json（dict格式）
     def from_dict(cls, d: Dict):
         return cls(arr=[
             d['vendor_id'],
