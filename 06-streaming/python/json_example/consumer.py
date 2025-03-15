@@ -41,7 +41,7 @@ if __name__ == '__main__':
         'key_deserializer': lambda key: int(key.decode('utf-8')),
         #将byte用utf-8 decode为json，再从json变回Ride class instances
         'value_deserializer': lambda x: loads(x.decode('utf-8'), object_hook=lambda d: Ride.from_dict(d)),
-        'group_id': 'consumer.group.id.json-example.1',
+        'group_id': 'consumer.group.id.json-example.2',
     }
 
     json_consumer = JsonConsumer(props=config)

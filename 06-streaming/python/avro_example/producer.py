@@ -14,14 +14,6 @@ from settings import RIDE_KEY_SCHEMA_PATH, RIDE_VALUE_SCHEMA_PATH, \
     SCHEMA_REGISTRY_URL, BOOTSTRAP_SERVERS, INPUT_DATA_PATH, KAFKA_TOPIC
 
 
-def delivery_report(err, msg):
-    if err is not None:
-        print("Delivery failed for record {}: {}".format(msg.key(), err))
-        return
-    print('Record {} successfully produced to {} [{}] at offset {}'.format(
-        msg.key(), msg.topic(), msg.partition(), msg.offset()))
-
-
 class RideAvroProducer:
     def __init__(self, props: Dict):
         # Schema Registry and Serializer-Deserializer Configurations
@@ -29,6 +21,7 @@ class RideAvroProducer:
         value_schema_str = self.load_schema(props['schema.value'])
         schema_registry_props = {'url': props['schema_registry.url']}
         schema_registry_client = SchemaRegistryClient(schema_registry_props)
+        #初始化AvroSerializer这个class的一个instance
         self.key_serializer = AvroSerializer(schema_registry_client, key_schema_str, ride_record_key_to_dict)
         self.value_serializer = AvroSerializer(schema_registry_client, value_schema_str, ride_record_to_dict)
 
@@ -63,21 +56,26 @@ class RideAvroProducer:
         return zip(ride_keys, ride_records)
 
     def publish(self, topic: str, records: [RideRecordKey, RideRecord]):
+        # records为一个list，其中每个元素是一个tuple（由RideRecordKey, RideRecord组成）
         for key_value in records:
+            # 分别提取tuple中的key和value元素
             key, value = key_value
             try:
                 self.producer.produce(topic=topic,
+                                      #调用AvroSerializer这个instance的时候传入的参数
                                       key=self.key_serializer(key, SerializationContext(topic=topic,
                                                                                         field=MessageField.KEY)),
+                                                                                        
                                       value=self.value_serializer(value, SerializationContext(topic=topic,
                                                                                               field=MessageField.VALUE)),
-                                      on_delivery=delivery_report)
+                                      on_delivery=RideAvroProducer.delivery_report)
             except KeyboardInterrupt:
                 break
             except Exception as e:
                 print(f"Exception while producing record - {value}: {e}")
-
+        # 确保所有消息都被发送出去并被写入kafka
         self.producer.flush()
+        # 给 Kafka Producer 一些额外的时间来确保所有消息都已经被发送，并且 Kafka 集群有足够的时间处理这些消息
         sleep(1)
 
 

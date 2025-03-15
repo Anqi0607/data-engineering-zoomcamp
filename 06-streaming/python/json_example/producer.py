@@ -32,9 +32,10 @@ class JsonProducer(KafkaProducer):
         return records
 
     def publish_rides(self, topic: str, messages: List[Ride]):
-        for ride in messages:
+        for i, ride in enumerate(messages):
             try:
-                record = self.producer.send(topic=topic, key=ride.pu_location_id, value=ride)
+                partition = i % 2
+                record = self.producer.send(topic=topic, key=ride.pu_location_id, value=ride, partition=partition)
                 print('Record {} successfully produced at offset {}'.format(ride.pu_location_id, record.get().offset))
             except KafkaTimeoutError as e:
                 print(e.__str__())
