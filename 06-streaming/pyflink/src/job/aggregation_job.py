@@ -3,10 +3,11 @@ from pyflink.table import EnvironmentSettings, DataTypes, TableEnvironment, Stre
 from pyflink.common.watermark_strategy import WatermarkStrategy
 from pyflink.common.time import Duration
 
+# Flink无法真的在postgres中create table，所以只是让flink知道table的definition，以便后续sql处理 
 def create_events_aggregated_sink(t_env):
     table_name = 'processed_events_aggregated'
     sink_ddl = f"""
-        CREATE TABLE {table_name} (
+        CREATE TABLE IF NOT EXISTS {table_name} (
             event_hour TIMESTAMP(3),
             test_data INT,
             num_hits BIGINT,
@@ -33,6 +34,7 @@ def create_events_source_kafka(t_env):
             WATERMARK for event_watermark as event_watermark - INTERVAL '1' SECOND
         ) WITH (
             'connector' = 'kafka',
+            -- redpanda充当kafka的broker以提供更高的性能和更简化的部署管理
             'properties.bootstrap.servers' = 'redpanda-1:29092',
             'topic' = 'test-topic',
             'scan.startup.mode' = 'earliest-offset',
@@ -76,6 +78,10 @@ def log_aggregation():
             test_data,
             COUNT(*) AS num_hits
         FROM TABLE(
+            -- TUMBLE会把source table按照event_watermark的时间划分成1 min的window
+            -- 并自动生成 window_start, window_end等,可以直接用于select query
+            -- 由于在define source table时设置了watermark,所以在进行window计算的时候,会允许有1秒的延迟
+            -- ji
             TUMBLE(TABLE {source_table}, DESCRIPTOR(event_watermark), INTERVAL '1' MINUTE)
         )
         GROUP BY window_start, test_data;

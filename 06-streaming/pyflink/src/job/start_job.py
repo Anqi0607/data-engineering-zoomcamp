@@ -1,7 +1,7 @@
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.table import EnvironmentSettings, DataTypes, TableEnvironment, StreamTableEnvironment
 
-
+# Flink无法真的在postgres中create table，所以只是让flink知道table的definition，以便后续sql处理 
 def create_processed_events_sink_postgres(t_env):
     table_name = 'processed_events'
     sink_ddl = f"""
