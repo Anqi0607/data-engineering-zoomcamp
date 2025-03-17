@@ -10,7 +10,7 @@ networks:
 
 services:
   jupyterlab:
-    image: jupyterlab
+    image: jupyter/base-notebook
     container_name: jupyterlab
     ports:
       - 8888:8888
