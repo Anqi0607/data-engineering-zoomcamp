@@ -23,13 +23,19 @@ def create_processed_events_sink_postgres(t_env):
 
 
 def create_events_source_kafka(t_env):
+    # table只会在
     table_name = "events"
     pattern = "yyyy-MM-dd HH:mm:ss.SSS"
     source_ddl = f"""
         CREATE TABLE {table_name} (
             test_data INTEGER,
             event_timestamp BIGINT,
+            -- 将event_timestamp处理成带有时区的timestamp TIMESTAMP_LTZ, 3表示精度
+            -- as 后面为计算该column的方法
+            -- event_watermark 的主要目的是为 watermark 的生成提供依据，它实际上并不是一个物理列，而是一个计算列或逻辑列
             event_watermark AS TO_TIMESTAMP_LTZ(event_timestamp, 3),
+            -- WATERMARK for ... as ... 用于定义 watermark
+            -- 设置watermark为等待5秒, 五秒之前的event不会参与计算
             WATERMARK for event_watermark as event_watermark - INTERVAL '5' SECOND
         ) WITH (
             'connector' = 'kafka',
@@ -50,13 +56,12 @@ def log_processing():
     env.enable_checkpointing(10 * 1000)
     # env.set_parallelism(1)
 
-    # 设置 Table 环境
+    # 设置 Table environment
     settings = EnvironmentSettings.new_instance().in_streaming_mode().build()
     t_env = StreamTableEnvironment.create(env, environment_settings=settings)
     try:
-        # 创建 Kafka source 表
+        # create Kafka source table
         source_table = create_events_source_kafka(t_env)
-        # 使用已存在的 processed_events 表
         postgres_sink = create_processed_events_sink_postgres(t_env)
         # 将 Kafka 中的记录写入 Postgres
         t_env.execute_sql(
@@ -64,6 +69,8 @@ def log_processing():
             INSERT INTO {postgres_sink}
             SELECT
                 test_data,
+                -- 由于之前在source table中定义的event_watermark不是一个物理列,因此在query的时候需要写清楚如何处理event_timestamp
+                -- 而不是直接select event_watermark column
                 TO_TIMESTAMP_LTZ(event_timestamp, 3) as event_timestamp
             FROM {source_table}
             """
