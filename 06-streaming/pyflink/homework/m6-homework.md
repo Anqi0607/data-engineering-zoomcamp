@@ -126,3 +126,51 @@ of the last command?
 
 **Ouput：True**
 
+## Question 4: Sending the Trip Data
+
+Now we need to send the data to the `green-trips` topic
+
+Read the data, and keep only these columns:
+
+* `'lpep_pickup_datetime',`
+* `'lpep_dropoff_datetime',`
+* `'PULocationID',`
+* `'DOLocationID',`
+* `'passenger_count',`
+* `'trip_distance',`
+* `'tip_amount'`
+
+Now send all the data using this code:
+
+```python
+producer.send(topic_name, value=message)
+```
+
+For each row (`message`) in the dataset. In this case, `message`
+is a dictionary.
+
+After sending all the messages, flush the data:
+
+```python
+producer.flush()
+```
+
+Use `from time import time` to see the total time 
+
+```python
+from time import time
+
+t0 = time()
+
+# ... your code
+
+t1 = time()
+took = t1 - t0
+```
+
+How much time did it take to send the entire dataset and flush? 
+
+**Answer: 24.4 seconds**
+
+see `producer.py` for code
+
