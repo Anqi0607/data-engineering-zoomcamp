@@ -45,3 +45,17 @@ CREATE TABLE processed_events_aggregated (
     num_hits INTEGER 
 );
 ```
+
+## Question 1: Redpanda version
+
+Now let's find out the version of redpandas. 
+
+For that, check the output of the command `rpk help` _inside the container_. The name of the container is `redpanda-1`.
+
+Find out what you need to execute based on the `help` output.
+
+What's the version, based on the output of the command you executed? (copy the entire version)
+
+Answer: rpk version v24.2.18 (rev f9a22d4430)
+
+`run docker exec -it redpanda-1 rpk --version`
