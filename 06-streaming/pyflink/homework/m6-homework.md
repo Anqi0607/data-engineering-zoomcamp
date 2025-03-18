@@ -120,7 +120,9 @@ of the last command?
 
 **Answer:**
 
-`add **print("Connected:", producer.bootstrap_connected())** to the end of script to check if successfully connected to the server`
+`add the code below to the end of script to check if successfully connected to the server`
+
+`print("Connected:", producer.bootstrap_connected())`
 
 **Ouput：True**
 
