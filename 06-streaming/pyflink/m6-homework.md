@@ -56,6 +56,26 @@ Find out what you need to execute based on the `help` output.
 
 What's the version, based on the output of the command you executed? (copy the entire version)
 
-Answer: rpk version v24.2.18 (rev f9a22d4430)
+**Answer: rpk version v24.2.18 (rev f9a22d4430)** 
 
 `run docker exec -it redpanda-1 rpk --version`
+
+
+## Question 2. Creating a topic
+
+Before we can send data to the redpanda server, we
+need to create a topic. We do it also with the `rpk`
+command we used previously for figuring out the version of 
+redpandas.
+
+Read the output of `help` and based on it, create a topic with name `green-trips` 
+
+What's the output of the command for creating a topic? Include the entire output in your answer.
+
+`run docker exec -it redpanda-1 rpk topic create green_trips`
+
+**Output:**
+| TOPIC       | STATUS |
+|-------------|--------|
+| green_trips | OK     |
+
